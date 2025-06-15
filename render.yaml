@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: macro-news-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    autoDeploy: false
+    region: oregon  # sau frankfurt/london dacă preferi EU
+
+    # Execută botul zilnic la 15:30 GMT+3 = 08:30 New York
+    schedule:
+      - cron: "30 12 * * *"  # 12:30 UTC = 15:30 România = 08:30 NY
+        command: python main.py
