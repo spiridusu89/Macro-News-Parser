@@ -1,38 +1,64 @@
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 
-def fetch_yahoo_finance_headlines():
-    url = "https://finance.yahoo.com/"
-    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-    soup = BeautifulSoup(response.text, "html.parser")
+RSS_FEEDS = [
+    "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+    "https://feeds.marketwatch.com/marketwatch/topstories/",
+    "https://seekingalpha.com/market_currents.xml"
+]
 
-    articles = soup.select("li.js-stream-content")
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+}
 
-    headlines = []
-    for article in articles:
-        title_tag = article.select_one("h3 a")
-        summary_tag = article.select_one("p")  # lead text
+def fetch_rss_feed(url):
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, features="xml")
+        items = soup.find_all("item")
 
-        if not title_tag or not title_tag.text:
-            continue
+        today_str = datetime.utcnow().strftime("%Y-%m-%d")
+        headlines = []
 
-        title = title_tag.text.strip()
-        summary = summary_tag.text.strip() if summary_tag else ""
+        for item in items:
+            title = item.title.text.strip() if item.title else ""
+            summary = item.description.text.strip() if item.description else ""
+            pub_date = item.pubDate.text.strip() if item.pubDate else ""
 
-        # curățăm titlurile irelevante (ex: "Live", "Video", etc.)
-        if any(bad in title.lower() for bad in ["live", "video", "podcast", "watch"]):
-            continue
+            try:
+                pub_datetime = parsedate_to_datetime(pub_date)
+                pub_str = pub_datetime.strftime("%Y-%m-%d")
+            except Exception:
+                continue
 
-        headlines.append({
-            "title": title,
-            "summary": summary
-        })
+            if pub_str != today_str or not title:
+                continue
 
-        if len(headlines) >= 5:  # limităm la cele mai recente 5
-            break
+            headlines.append({
+                "title": title,
+                "summary": summary
+            })
 
-    return headlines
+        return headlines
 
-# funcția principală de parser pe care o va apela main.py
+    except Exception as e:
+        print(f"❌ Error fetching RSS from {url}: {e}")
+        return []
+
 def get_headlines():
-    return fetch_yahoo_finance_headlines()
+    all_headlines = []
+    seen_titles = set()
+
+    for feed_url in RSS_FEEDS:
+        headlines = fetch_rss_feed(feed_url)
+        for h in headlines:
+            if h["title"] in seen_titles:
+                continue
+            all_headlines.append(h)
+            seen_titles.add(h["title"])
+
+    print(f"✅ Total headlines collected from RSS: {len(all_headlines)}")
+    return all_headlines

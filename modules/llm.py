@@ -20,24 +20,13 @@ TICKERS_OF_INTEREST = [
     "HPE", "NICE", "Cerebras",  # companie nelistată încă
 
     # Commodities (tickere oficiale)
-    "CL",     # Crude Oil WTI
-    "XAU/USD",  # Gold
-    "XAG/USD",  # Silver
-    "PL",     # Platinum
+    "CL", "XAU/USD", "XAG/USD", "PL",
 
     # Indici bursieri (tickere oficiale)
-    "RUT",      # Russell 2000
-    "SPX",      # S&P 500
-    "NDX",      # Nasdaq 100
-    "DJI",      # Dow Jones
-    "STOXX50E", # Euro Stoxx 50
-    "FTSE",     # FTSE 100
-    "DAX",    # DAX
-    "N225",     # Nikkei 225
+    "RUT", "SPX", "NDX", "DJI", "STOXX50E", "FTSE", "DAX", "N225",
 
     # Crypto
-    "BTC-USD",  # Bitcoin
-    "DOGE-USD"  # Dogecoin
+    "BTC-USD", "DOGE-USD"
 ]
 
 def build_prompt(headlines, tickers):
@@ -58,21 +47,22 @@ Instructions:
 
 1. For each ticker:
    - Decide if it is affected by any of the news.
-   - If yes, identify which headline(s) are relevant.
    - Determine the direction of impact: positive / negative / neutral.
 
-2. Write a brief overall summary of the current market sentiment and context based on all headlines (2–3 sentences).
+2. Write a brief overall summary of the current market sentiment and context based on all headlines (5–6 sentences).
 
 3. Create a structured response with:
    - A global summary.
    - A section called "impact" listing each ticker and the impact.
-   - A section "reasons" explaining which headlines affect which tickers.
    - A final section "prompt": generate a ChatGPT-style question that can be used for deeper analysis of the affected tickers and their context.
 
 Important:
-- Only include tickers that are actually affected in the "reasons" and "prompt".
+- Do not include tickers with neutral sentiment in the "impact" section.
 - Be concise, factual, and avoid speculation.
-- The final output must be in valid JSON format with 4 top-level fields: summary, impact, reasons, and prompt.
+- ⚠️ Only respond with a valid JSON object.
+- ⚠️ Do not add any explanations, introductions, markdown, or preface.
+- ⚠️ Your entire response must be a JSON with exactly 3 top-level keys: "summary", "impact", and "prompt".
+- The response must be plain JSON without any additional formatting or comments.
 
 Below are the inputs:
 ---
@@ -103,11 +93,16 @@ def query_llm(headlines):
     if response.status_code != 200:
         raise Exception(f"LLM API failed: {response.status_code} - {response.text}")
 
-    reply = response.json()["choices"][0]["message"]["content"]
+    json_data = response.json()
+
+    if "choices" not in json_data:
+        print("❌ LLM response malformed:", json_data)
+        return {}
+
+    reply = json_data["choices"][0]["message"]["content"]
 
     try:
-        result = eval(reply) if reply.strip().startswith("{") else {}
+        parsed = eval(reply) if reply.strip().startswith("{") else {}
+        return parsed if isinstance(parsed, dict) else {}
     except Exception:
-        result = {}
-
-    return result
+        return {}
